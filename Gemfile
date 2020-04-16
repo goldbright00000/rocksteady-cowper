@@ -7,7 +7,7 @@ gem 'papertrail'
 gem 'statsd-ruby', '1.2.1'
 gem 'sinatra', '2.0.0'
 gem 'sinatra-contrib', '2.0.0'
-gem 'haml', '4.0.5'
+gem 'haml', '5.0.0'
 gem 'thin', '1.7.2'
 
 gem 'mysql2', '0.4.5'
