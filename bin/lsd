@@ -1,0 +1,319 @@
+#!/usr/bin/env ruby
+
+require './storage/interface'
+require 'byebug'
+require 'csv'
+
+require './storage/interface'
+require './config/default'
+
+# CSV support may require this
+I18n.enforce_available_locales = false
+
+module Rocksteady
+  module BuiltKitsReport
+    extend self
+
+    HOSTNAME = Rocksteady::Config.url_hostname
+    MY_BRAND = Rocksteady::Config.brand
+
+    SUBDOMAIN = MY_BRAND.downcase
+
+    NULL_PRINTJOB = {'print_request' => {'shipping_details' => {'address_lines' => []}} }
+
+    Record  = Struct.new(:ip_address,
+                         :country,
+                         :date_kit_built,
+                         :time_kit_built,
+                         :date_kit_purchased,
+                         :time_kit_purchased,
+                         :design_time,
+                         :order_number,
+                         :print_number,
+                         :product_line,
+                         :manufacturer,
+                         :model,
+                         :grouped_year,
+                         :target_category,
+                         :competing_region,
+                         :rule_set,
+                         :use_category,
+                         :use_level_1,
+                         :use_level_2,
+                         :use_level_3,
+                         :nationality,
+                         :name,
+                         :number,
+                         :letter,
+                         :state,
+                         :target_category_or_target_kit,
+                         :regulations,
+                         :purchased,
+                         :discount_applied,
+                         :discount_code,
+                         :price_paid_euro,
+                         :price_paid_currency_purchased,
+                         :purchase_email,
+                         :was_design_saved,
+                         :save_email,
+                         :address,
+                         :telephone,
+                         :design_link,
+                         :brand,
+                         :sub_brand)
+
+
+
+
+
+    def design_url(id, brand)
+      result = "https://#{HOSTNAME}/app/#/kits/-/-/-/-/#{id}/selector-map"
+
+      if brand != MY_BRAND
+         result = result.gsub(SUBDOMAIN, brand.downcase)
+      end
+
+      result
+    end
+
+    def format_as_date_time(ts)
+      Time.at(ts).strftime("%d/%m/%Y at %H:%M:%S")
+    end
+
+    def format_as_date(ts)
+      Time.at(ts).strftime("%d/%m/%Y") rescue ''
+    end
+
+
+    def format_as_time(ts)
+      Time.at(ts).strftime("%H:%M:%S") rescue ''
+    end
+
+
+    def lookup_name_by_id(table, id)
+      return '' unless id && id.to_i > 0
+
+      records = Storage::MySQL.fetch("select name from #{table} where id = #{id}")
+
+      _return = records.first[:name] rescue "Not Known (#{id})"
+    end
+
+
+    def lookup_product_line(id)
+      records = Storage::MySQL.fetch("select name from product_lines pl, target_types tt where pl.target_type_id = tt.id and pl.id = #{id}")
+
+      _return = records.first[:name] rescue "Not Known (#{id})"
+
+      _return
+    end
+
+
+
+    def lookup_country(iso)
+      records = Storage::MySQL.fetch("select name from countries where iso_code2 = '#{iso}'")
+
+      _return = records.first[:name] rescue "Not Known (#{iso})"
+    end
+
+
+    def lookup_nationality(id)
+      records = Storage::MySQL.fetch("select nationality from countries where id = '#{id}'")
+
+      _return = records.first[:nationality] rescue "Not Known (#{id})"
+    end
+
+
+    def lookup_manufacturer(manufacturers, id)
+      return 'Not recorded' unless id
+
+      m = manufacturers.find{|e| e['id'] == id}
+
+      _return = m['name']
+
+      _return
+    end
+
+
+    def uses(kit, level)
+      a = kit['order_kit']['uses']
+
+      return '' unless a
+
+      return '' unless level < a.size
+
+      return a[level]
+    end
+
+
+
+
+    def use_category(kit)
+      a = kit['use_categories']
+
+      return '' unless a
+
+      return '' unless a.size > 0
+
+      return a[0]['name']
+    end
+
+
+
+    def format_as_duration(d)
+
+      return '' unless d
+
+      return "00:00:00" if 0 == d
+
+      d = d.to_i
+
+      mm, ss = d.divmod(60)
+      hh, mm = mm.divmod(60)
+      dd, hh = hh.divmod(24)
+
+      if dd > 0
+        _return = "%02d days %02d:%02d:%02d" % [dd, hh, mm, ss]
+      else
+        _return = "%02d:%02d:%02d" % [hh, mm, ss]
+      end
+
+      _return
+    end
+
+
+    def process_design(design)
+
+      not_my_brand = Rocksteady::Config.brand != design['brand']
+   
+      return nil if not_my_brand
+
+
+      s = Rocksteady::Storage::Designs.find_by_id(design.id)
+      
+      unless s
+        puts "(E) The storage for design #{design.id} could not be found"
+
+        #
+        #   Early return
+        #
+        return nil
+      end
+
+      kit = JSON.parse(s)
+
+      print_jobs = [NULL_PRINTJOB]
+
+      design_print_jobs = nil
+      if (!@map_design_to_print_job[design.id].nil?)
+        design_print_jobs = @map_design_to_print_job[design.id]
+        if (design_print_jobs)
+          if (design_print_jobs['print_jobs'])
+            print_jobs = design_print_jobs['print_jobs']
+          end
+        end
+      end
+
+      rr = []
+
+      print_jobs.each do |print_job|
+        r = Record.new
+
+        r.ip_address                    = design.input['client_ip']
+        r.country                       = lookup_country design.input['geo_location']
+        r.date_kit_built                = format_as_date design['created_at']
+        r.time_kit_built                = format_as_time design['created_at']
+	      r.date_kit_purchased            = (print_job != NULL_PRINTJOB) ? format_as_date(print_job['created_at']) : ''
+	      r.time_kit_purchased            = (print_job != NULL_PRINTJOB) ? format_as_time(print_job['created_at']) : ''
+        r.design_time                   = format_as_duration kit['order_kit']['cumulative_design_time']
+        r.order_number                  = design.id
+        r.print_number                  = design_print_jobs != nil ? design_print_jobs['_id'] : ''
+        r.product_line                  = lookup_product_line design.input['product_line_id']
+        r.manufacturer                  = lookup_manufacturer(kit['manufacturers'], kit['order_kit']['manufacturer_id'])
+        r.grouped_year                  = kit['target_kits'][0]['qualifying_data'] rescue ''
+        r.target_category               = kit['target_categories'][0]['name']
+        r.competing_region              = lookup_name_by_id 'countries', design.input['competing_region_id']
+        r.rule_set                      = kit['rule_sets'][0]['name'] rescue ''
+        r.use_category                  = use_category(kit)
+        r.use_level_1                   = uses(kit, 1)
+        r.use_level_2                   = uses(kit, 2)
+        r.use_level_3                   = uses(kit, 3)
+        r.nationality                   = lookup_nationality design.input['nationality_id']
+        r.name                          = design.input['user_name']
+        r.number                        = design.input['user_number']
+        r.letter                        = design.input['user_letter']
+        r.state                         = design.input['user_state']
+        r.model                         = kit['targets'][0]['name'] rescue ''
+        r.target_category_or_target_kit = kit['order_kit']['is_target_category'] ? 'Target Category' : 'Target Kit'
+        r.regulations                   = kit['order_kit']['rule_set_id'].nil? ? 'No' : 'Yes'
+        r.purchased                     = print_job != NULL_PRINTJOB ? 'Yes' : 'No'
+        r.discount_applied              = nil
+        r.discount_code                 = print_job != NULL_PRINTJOB ? print_job['print_request']['discount_code'] : ''
+        r.price_paid_euro               = print_job != NULL_PRINTJOB ? print_job['print_request']['total_cost'] : ''
+        r.price_paid_currency_purchased = nil
+        r.purchase_email                = print_job != NULL_PRINTJOB ? print_job['print_request']['email'] : ''
+        r.was_design_saved              = nil
+        r.save_email                    = kit['order_kit']['email'] ? kit['order_kit']['email'] : kit['email']
+        r.address                       = print_job != NULL_PRINTJOB ? print_job['print_request']['shipping_details']['address_lines'].join(',') : ''
+        r.telephone                     = print_job != NULL_PRINTJOB ? print_job['print_request']['shipping_details']['telephone'] : ''
+        r.design_link                   = design_url(design.id, design['brand'])
+        r.brand                         = design['brand']
+        r.sub_brand                     = design.input['sub_brand']
+
+	      rr << r
+       end
+      return rr
+    end
+
+    def run
+      designs = Rocksteady::Storage::Designs.recent_interesting
+
+      #
+      #  Only include jobs if they are in a state which indicates that they were purchased ok.
+      #
+      paid_statuses = ['Payment Received', 'PDF Generation Failed', 'Ready To Print', 'Collecting', 'Collected', 'Packing', 'Packed', 'Shipped']
+
+      re = Rocksteady::Storage::Orders.recent_interesting.delete_if{|j| false == paid_statuses.include?(j.status)}
+
+      @map_design_to_print_job = re.inject({}) do |h, e|
+	      ord = Rocksteady::Storage::Orders.find_by_id(e.id, :no_svg_data)
+        if h[e.design_id]
+          if h[e.design_id]['print_jobs'] 
+	           h[e.design_id]['print_jobs'].push(ord)
+          else
+     	       h[e.design_id]['print_jobs'] = []
+	           h[e.design_id]['print_jobs'].push(ord)
+          end
+        else
+          h[e.design_id] = {}
+	        h[e.design_id]['print_jobs'] = []
+	        h[e.design_id]['print_jobs'].push(ord)
+	      end
+        h[e.design_id]['_id'] = e.id
+        h
+      end
+
+      csv_file = CSV.open('./built_kits_report.csv', 'w:UTF-8', col_sep: ';')
+
+      designs = designs.sort_by{|i|  [i.updated_at]}
+
+      csv_file << Record.members
+
+      designs.each do |d|
+        r = process_design(d) rescue nil
+
+        next unless r
+
+        r.each do |rr|
+          csv_file << rr.to_a
+        end
+    end
+
+    ensure
+      csv_file.close rescue nil
+    end
+  end
+end
+
+Rocksteady::BuiltKitsReport.run
+
+

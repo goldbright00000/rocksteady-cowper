@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+ME=`basename "$0"`
+LCK="/tmp/${ME}.LCK"
+exec 8>$LCK
+
+flock -n 8
+
+bundle exec ruby jobs/pdfs.rb

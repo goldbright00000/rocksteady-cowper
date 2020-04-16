@@ -1,0 +1,23 @@
+#!/usr/bin/env ruby
+
+require 'byebug'
+require 'redis'
+
+require './storage/interface'
+require './model/bin_manager'
+
+
+args = $*
+
+if args.size >= 1
+  new_status = 'Ready To Print'
+
+  args.each do |id|
+    puts "Moving #{id} from 'PDF Generation Failed to '#{new_status}'"
+
+    Rocksteady::Storage::Orders.move_status(id, 'PDF Generation Failed', new_status)
+  end
+
+else
+  puts "You need to specify the print job id and the status"
+end

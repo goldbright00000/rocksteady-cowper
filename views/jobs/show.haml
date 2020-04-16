@@ -1,0 +1,159 @@
+- require './helpers/views/kits.rb'
+
+%html
+   %head
+      %title Admin UI for Rocksteady
+
+      %script(src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js")
+
+      <style type = "text/css">
+      h2, h3 {
+      font-family: 'Verdana';
+      color: gray;
+      }
+      table {
+      font-family: 'Verdana';
+      }
+      table a:link {
+      color: #666;
+      font-weight: bold;
+      text-decoration:none;
+      }
+      table a:visited {
+      color: #999999;
+      font-weight:bold;
+      text-decoration:none;
+      }
+      table a:active,
+      table a:hover {
+      color: #bd5a35;
+      text-decoration:underline;
+      }
+      table {
+      font-family:Arial, Helvetica, sans-serif;
+      color:#666;
+      font-size:12px;
+      text-shadow: 1px 1px 0px #fff;
+      background:#eaebec;
+      margin:20px;
+      border:#ccc 1px solid;
+      border-radius:3px;
+      box-shadow: 0 1px 2px #d1d1d1;
+      }
+      table th {
+      padding:21px 25px 22px 25px;
+      border-top:1px solid #fafafa;
+      border-bottom:1px solid #e0e0e0;
+
+      background: #ededed;
+      background: -webkit-gradient(linear, left top, left bottom, from(#ededed), to(#ebebeb));
+      background: -moz-linear-gradient(top,  #ededed,  #ebebeb);
+      }
+      table th:first-child {
+      font-size: 1.2em;
+      text-align: left;
+      padding-left:20px;
+      }
+      table tr:first-child th:first-child {
+      border-top-left-radius:3px;
+      }
+      table tr:first-child th:last-child {
+      border-top-right-radius:3px;
+      }
+      table tr {
+      text-align: center;
+      padding-left:20px;
+      }
+      table td:first-child {
+      text-align: left;
+      padding-left:20px;
+      border-left: 0;
+      }
+      table td {
+      font-size: 1.4em;
+      padding:18px;
+      border-top: 1px solid #ffffff;
+      border-bottom:1px solid #e0e0e0;
+      border-left: 1px solid #e0e0e0;
+
+      background: #fafafa;
+      background: -webkit-gradient(linear, left top, left bottom, from(#fbfbfb), to(#fafafa));
+      background: -moz-linear-gradient(top,  #fbfbfb,  #fafafa);
+      }
+      table tr.even td {
+      background: #f6f6f6;
+      background: -webkit-gradient(linear, left top, left bottom, from(#f8f8f8), to(#f6f6f6));
+      background: -moz-linear-gradient(top,  #f8f8f8,  #f6f6f6);
+      }
+      table tr:last-child td {
+      border-bottom:0;
+      }
+      table tr:last-child td:first-child {
+      border-bottom-left-radius:3px;
+      }
+      table tr:last-child td:last-child {
+      border-bottom-right-radius:3px;
+      }
+      table tr:hover td {
+      background: #f2f2f2;
+      background: -webkit-gradient(linear, left top, left bottom, from(#f2f2f2), to(#f0f0f0));
+      background: -moz-linear-gradient(top,  #f2f2f2,  #f0f0f0);
+      }
+      cust_name {
+      font-family: "Verdana";
+      font-style: normal;
+      font-size: 2em;
+      color: blue;
+      padding-bottom: 350px;
+      }
+      </style>
+
+
+   %body
+      #top
+         .wrapper
+            .logo
+
+
+      #Address
+         %cust_name #{@job['print_request']['shipping_details']['name']} (#{@job['print_request']['email']})
+         %p
+         %h3 Summary
+         %table
+            %tbody
+               %tr
+                  %th Placed
+                  %td #{Time.at(@job['created_at']).strftime("%m/%d/%Y at %H:%M:%S")}
+                  %th Status
+                  %td #{@job['status']}
+                  %th Price
+                  %td €#{'%.2f' % @job['print_request']['total_cost']}
+
+         %br
+         %h3 Shipping Details
+         %table
+            %tbody
+               %tr
+                  %th Name
+                  %td #{@job['print_request']['shipping_details']['name']}
+               - @job['print_request']['shipping_details']['address_lines'].each_with_index do |line, i|
+                  - if line and line.size > 0
+                     %tr
+                     %th Address #{i + 1}
+                     %td= line
+               %tr
+                  %th Packaging Container
+                  %td= @current_container
+
+
+
+         %br
+         %br
+         - @job['print_request']['shapes'].each do |shape|
+            %table
+               %tr
+                  %th #{shape['position_name']} : Qty #{shape['qty']} at €#{'%.2f' % shape['decal_price']} each
+               %tbody
+                  %tr
+                     %td
+                        =shrink_svg(shape['svg'])

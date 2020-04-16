@@ -1,0 +1,37 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+require "./realtime/base"
+require './storage/interface'
+require './jobs/emailnotification/designs'
+
+
+module Rocksteady
+  module MQ
+    module Library
+      extend Rocksteady::MQ::Base
+      extend self
+
+      private
+
+      def handle(msg)
+        entry    = msg['library_entry']
+
+        id       = entry['design_id']
+        b64      = entry['selector']
+        email    = entry['email_address']
+
+        selector = Base64.decode64(b64[22..-1])
+
+        Logging.info "#{$0} Sending email to #{email} for #{id}"
+
+        Rocksteady::Storage::Designs.write_selector(id, selector)
+
+        Rocksteady::EmailNotification::Designs.send_one_email(id, email)
+      end
+
+    end
+  end
+end
+
+
+Rocksteady::MQ::Library.run('add_to_library', Rocksteady::MQ::Base::AddDesignToLibrary)

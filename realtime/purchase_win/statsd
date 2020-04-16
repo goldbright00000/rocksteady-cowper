@@ -1,0 +1,35 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+
+require "./realtime/base"
+require 'statsd-ruby'
+
+
+module Rocksteady
+  module MQ
+    #
+    #   Immediately respond to purchases with an invoice email
+    #   We still have the crontab as a backup.
+    #
+    #   This process relies on a separate process to send the
+    #   email.
+    #
+    module StatsD
+      extend Rocksteady::MQ::Base
+      extend self
+
+      @@statsd = Statsd.new('localhost', 8125)
+
+      #
+      #   Return true to indicate success.
+      #
+      def handle msg
+        @@statsd.increment('cowper.purchase')
+
+        true
+      end
+    end
+  end
+end
+
+Rocksteady::MQ::StatsD.run('purchase_win_statsd', Rocksteady::MQ::Base::PurchaseWin)

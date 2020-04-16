@@ -1,0 +1,80 @@
+%html
+  %head
+    %meta{:charset => "utf-8"}
+    %title "#{Rocksteady::Config.brand}"
+
+  %body
+    %div
+
+      %table{'style' => 'font-family:Sans-Serif', :cellspacing => '0', :cellpadding => '0', :border => '0', :width => '600', :bgcolor => 'white'}
+        %tr
+          %td{:colspan => 2}
+            %img{:src => "https://app.#{Rocksteady::Config.brand}.com/app/branding/images/brand_logo.png"}
+
+            %h1 Thank you for your purchase
+
+            %h2 Summary of Purchased Design
+
+            %img{:width => '100%', :src => "#{selector_url}"}
+
+        %tr
+          %td{:width => '40%'}
+            %h3 Price
+
+          %td{:width => '60%'}
+            %h3 #{total_price}
+
+        %tr
+          %td{:width => '40%'}
+            %h3 Delivery Estimate
+
+          %td{:width => '60%'}
+            %h3 #{delivery_estimate}
+
+
+        %tr
+          %td{:colspan => 2}
+            %h2 Details of Order
+
+
+        %tr
+          %td{:col_span => '3', :align => 'center'}
+            %table{:cellspacing => '0', :cellpadding => '5', :width => '80%', :align => 'center', :border => '1'}
+              - positions.each do |position|
+                <tr>
+                <td colspan="3" align="center">
+                <h3>#{position['position_name']}</h3>
+                </td>
+                </tr>
+
+                <tr>
+                <td rowspan="2" align="center">
+                <img src="#{position['url']}">
+                <!-- <img alt="#{position['position_name']}" src=""> -->
+                </td>
+                <td>
+                <h4>Quantity:</h4>
+                </td>
+                <td>
+                = position['qty']
+                </td>
+                </tr>
+                <tr>
+                <td>
+                <h4>Material:</h4>
+                </td>
+                <td>
+                = position['material']
+                </td>
+                </tr>
+        %tr
+          %td{colspan: '2'}
+            %br
+            %table{:cellspacing => '0', :cellpadding => '5', :width => '80%', :border => '0'}
+              %tr
+                %td{align: 'left'}
+                  %a{:href => "#{Rocksteady::Config.facebook_page}"}Like us on Facebook
+                %td{align: 'center'}
+                  %a{:href => "http://www.#{Rocksteady::Config.brand}.com"}#{Rocksteady::Config.brand}.com
+                %td{align: 'right'}
+                  %a{:href => "#{design_url}"}Your Design

@@ -1,0 +1,25 @@
+#!/usr/bin/env ruby
+
+require './storage/interface'
+require 'byebug'
+
+
+records = Rocksteady::Storage::Orders.recent_interesting
+
+records = records.sort_by{|i|  [i.updated_at, i.status]}
+
+displayed = 0
+
+records.each do |r|
+  r.email = 'missing' unless r.email
+
+  next if r.updated_at.year > 2200
+
+  displayed += 1
+
+  puts "#{r.id}    #{r.brand}  #{r.updated_at}    #{r.email.ljust(30)} \t#{r.status}"
+end
+
+hidden = records.size - displayed
+
+puts("\n\tWarning: #{hidden} records hidden\n\n") if hidden > 0

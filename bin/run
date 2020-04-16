@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+bundle exec thin -S /tmp/cowper-socket.0 -R config.ru  start

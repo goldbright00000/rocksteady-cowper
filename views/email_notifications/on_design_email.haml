@@ -1,0 +1,28 @@
+%html
+  %head
+    %meta{:charset => "utf-8"}
+    %title #{Rocksteady::Config.brand}
+
+  %body
+    %div
+
+      %table{'style' => 'font-family:Sans-Serif', :cellspacing => '0', :cellpadding => '0', :border => '0', :width => '600', :bgcolor => 'white'}
+        %tr
+          %td{:colspan => 2}
+            %img{:src => "https://#{hostname}/app/branding/images/brand_logo.png"}
+
+            <h1>Your Design Can Be Accessed <a href="#{design_url}">Here</a></h1>
+
+            %img{:width => '100%', :src => "#{selector_url}"}
+
+        %tr
+          %td{colspan: '2'}
+            %br
+            %table{:cellspacing => '0', :cellpadding => '5', :width => '80%', :border => '0'}
+              %tr
+                %td{align: 'left'}
+                  %a{:href => "#{Rocksteady::Config.facebook_page}"}Like us on Facebook
+                %td{align: 'center'}
+                  %a{:href => "http://www.#{Rocksteady::Config.brand}.com"}#{Rocksteady::Config.brand}.com
+                %td{align: 'right'}
+                  %a{:href => "#{design_url}"}Your Design

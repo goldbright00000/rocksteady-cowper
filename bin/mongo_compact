@@ -1,0 +1,37 @@
+#!/usr/bin/env ruby 
+
+require 'mongo'
+require 'byebug'
+
+@connection = Mongo::Connection.new
+
+@db = @connection.db("rocksteady")
+
+
+system_collections = ['system.indexes', 'system.profile']
+
+all_colletions = @db.collection_names
+
+
+
+to_compact = all_colletions - system_collections
+
+
+
+puts "Compacting #{to_compact.size - 1} collections"
+
+scale = in_megabytes = 1024 * 1024
+
+to_compact.each {|n| 
+  stats = @db.command({:collstats => n, :scale => in_megabytes})
+
+  n_objects = stats['count']
+  size_mb = stats['size']
+
+  next unless n_objects > 0
+
+  puts "#{n.capitalize} contains #{n_objects} objects using #{size_mb} MB"
+
+  @db.command({:compact => n}) rescue puts "Could not compact #{n}"
+}
+

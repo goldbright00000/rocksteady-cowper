@@ -1,0 +1,26 @@
+#!/bin/bash
+
+cd /var/hg/repos/cowper
+
+
+if [ ! -e ./.needs_upgrade ]
+then
+   exit 0
+fi
+
+
+export PATH="$HOME/.rbenv/bin:$PATH"
+
+eval "$(rbenv init -)"
+
+ps -eaf | grep 'thin'
+
+hg up -C
+
+bundle install
+
+bundle exec thin -C thin.yaml restart
+
+ps -eaf | grep 'thin'
+
+rm ./.needs_upgrade

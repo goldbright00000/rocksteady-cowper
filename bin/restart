@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+thin -C thin.yaml -O restart
+/etc/init.d/add_to_library restart
+/etc/init.d/discount_code_usage restart
+/etc/init.d/index_latest_designs restart
+/etc/init.d/send_invoice restart

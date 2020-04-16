@@ -1,0 +1,302 @@
+#!/usr/bin/env ruby
+#-*- mode: ruby -*-
+
+require 'byebug'
+require 'httparty'
+require 'awesome_print'
+require './storage/mysql'
+
+Event = Struct.new(:time, :description, :country, :ip_address, :request, :status, :duration)
+
+module Rocksteady
+  module Watch
+    extend self
+
+    SLOW_LIMIT = 8
+
+    REFRESH_INTERVAL = 300
+
+    @watch_state_file = './tmp/watch_state'
+
+    @event_count = 0
+
+    @duration_frequency = Hash.new{0}
+
+    @max_pt_id = 0
+
+    @slow_events = []
+
+    @username = 'root'
+
+    @password = 'rc223svt'
+
+    @database = 'rocksteady_watch'
+
+    def parse_save_order_kit(txt)
+      _return = txt
+
+      md = /PUT \/api\/order_kits\/(.*)( .*)/.match(txt)
+
+      if md
+        _return = "Saving Kit #{md[1]}"
+      end
+
+      _return
+    end
+
+
+    def parse_print_kit(txt)
+      _return = txt
+
+      md = /PUT \/api\/print_requests\/(.*)( .*)/.match(txt)
+
+      if md
+        _return = "Printing Kit #{md[1]}"
+      end
+
+      _return
+    end
+
+
+
+    def time_in_longseconds(txt)
+      return nil unless txt
+
+      txt[11] = ' '
+      dt = DateTime.parse(txt) rescue debugger
+
+      return dt.to_time.to_i
+    end
+
+
+    def parse_description(request)
+      case
+      when request.start_with?('POST /api/order_kits')
+        description = "Creating a Kit"
+      when request.start_with?('PUT /api/order_kits')
+        description = parse_save_order_kit(request)
+      when request.start_with?('PUT /api/print_requests')
+        description = parse_print_kit(request)
+      else
+        description = ''
+      end
+
+      description
+    end
+
+
+
+
+    def email_chris(event)
+      msg = event.to_json
+      `echo \""#{msg}"\" | mail -s "alert" "chris@rocksteady.com"`
+    end
+
+
+
+    def analyze(event)
+      if event.duration > SLOW_LIMIT || (event.ip_address != '127.0.0.1' && event.ip_address != '' && event.ip_address != '-')
+        @ip_addresses[event.ip_address] = event.country unless @ip_addresses[event.ip_address]
+      end
+
+
+      if event.duration > SLOW_LIMIT
+        @slow_events << event
+#        email_chris event
+      end
+
+      @duration_frequency[event.duration.floor] += 1
+    end
+
+
+
+    def fetch_events(since, interval = 60)
+      txt = `papertrail --min-time '#{since}' --max-time '#{since + interval}' -s lon-appsrvr-2 -S access.log -j`
+
+
+      _return = []
+
+      txt.lines.each do |line|
+        h = JSON.parse line
+
+        this_id = h['id'].to_i
+
+        if this_id < @max_pt_id
+#          puts "Skipping #{ap h}"
+          next
+        end
+
+
+        @max_pt_id = this_id
+
+        parts = h['message'].split('|')
+
+        next if parts.size == 1
+
+        country     = parts[0]
+        ip_address  = parts[1]
+
+        time        = parts[2]
+        request     = parts[3]
+        description = parse_description(request)
+        status      = parts[6].to_i
+        duration    = parts[10].to_f
+
+        _return << Event.new(time, description, country, ip_address, request, status, duration)
+      end
+
+
+
+      _return
+    end
+
+
+
+
+    def save(event)
+    end
+
+
+
+    def run(since, interval)
+      @ip_addresses = {}
+
+      events = fetch_events(since, interval)
+
+      if events.size == 0
+        puts "\nNothing happened since #{since}" rescue debugger
+      else
+
+        started_at = time_in_longseconds events.first.time
+        ended_at   = time_in_longseconds events.last.time
+        duration   = ended_at - started_at rescue debugger
+
+        events.each do |event|
+          @event_count += 1
+
+          analyze event
+
+          save event
+
+          ap event if event.status > 299 || event.status < 200
+        end
+
+        puts "Events started at #{events.first.time} and ended at #{events.last.time}, #{(duration / REFRESH_INTERVAL).round(1)} mins later"
+        puts "There were #{@ip_addresses.keys.size} users active across #{events.size} events"
+
+        countries = @ip_addresses.values.map.inject(Hash.new(0)) do |h,v|
+          h[v] = h[v] + 1
+          h
+        end
+
+        ap countries
+      end
+    end
+
+
+    def restore_state
+      t_since = Time.now.to_i -  REFRESH_INTERVAL # 1 minute ago
+
+
+      if File.exist? @watch_state_file
+        t_since = Time.parse File.read(@watch_state_file)
+      end
+
+      t_since
+    end
+
+
+    def save_state
+      File.write(@watch_state_file, "#{Time.now}")
+    end
+
+
+
+    def count_events_between_x_and_y_seconds(x,y)
+      (x..(y - 1)).each.inject(0) {|sum, i| sum + @duration_frequency[i]}
+    end
+
+
+    def count_events_over_x_seconds(x)
+      keys = @duration_frequency.keys.select{|k| k >= x}
+
+
+      keys.each.inject(0) {|sum, k| sum + @duration_frequency[k]}
+    end
+
+
+
+    def display_duration_frequency
+      frequency = @event_count / 100.00
+
+      less_than_1s  = count_events_between_x_and_y_seconds(0,1)
+      less_than_3s  = count_events_between_x_and_y_seconds(0,3)
+      less_than_4s  = count_events_between_x_and_y_seconds(0,4)
+      less_than_10s = count_events_between_x_and_y_seconds(0,10)
+
+      between_10_and_30s = count_events_between_x_and_y_seconds(10,30)
+
+      over_30s = count_events_over_x_seconds(30)
+
+
+
+      one_s_msg        = "#{(less_than_1s / frequency).round(2)}% under 1s"
+      three_s_msg      = "#{(less_than_3s / frequency).round(2)}% under 3s"
+      four_s_msg       = "#{(less_than_4s / frequency).round(2)}% under 4s"
+      ten_s_msg        = "#{(less_than_10s / frequency).round(2)}% under 10s"
+
+      ten_to_30s_msg   = "#{(between_10_and_30s / frequency).round(2)}% between 10 and 30s"
+
+      over_30s_msg     = "#{(over_30s / frequency).round(2)}% over 30s"
+
+      puts "Total: #{@event_count} events => #{one_s_msg} | #{three_s_msg} | #{four_s_msg} | #{ten_s_msg} | #{ten_to_30s_msg} | #{over_30s_msg}"
+    end
+
+
+
+    def log_slow_events
+      return if 0 == @slow_events.size
+
+      File.write('./log/slow_events', @slow_events.awesome_inspect)
+    end
+
+
+
+    def maybe_sleep(t_since)
+      if t_since.to_i > Time.now.to_i
+        puts "Sleeping #{REFRESH_INTERVAL}"
+        sleep REFRESH_INTERVAL
+      end
+    end
+
+
+
+
+
+    def watch
+      t_since = restore_state
+
+#      c = Sequel.connect("mysql2://#{@username}:#{@password}@#{hostname}/#{@database}")
+
+
+      while 1
+
+        run(t_since, REFRESH_INTERVAL)
+
+        save_state
+
+        log_slow_events
+
+        display_duration_frequency
+
+        t_since += REFRESH_INTERVAL # Time.at(Time.now.to_i - REFRESH_INTERVAL)
+
+        maybe_sleep t_since
+      end
+    end
+
+  end
+end
+
+
+Rocksteady::Watch.watch

@@ -1,0 +1,68 @@
+#!/usr/bin/env ruby
+
+require 'byebug'
+require 'httparty'
+require 'json'
+require 'awesome_print'
+require 'redis'
+require './lib/logging'
+
+
+module Rocksteady
+  module Utils
+    module Bins
+      extend self
+
+      #
+      #  c.c.b.store maps bins to print job ids
+      #  c.c.j.store maps job ids to bins
+      #  c.c.b.next is the id of the bin to assign if
+      #    c.c.b.free is empty
+      #  c.c.b.free is a list of bins which were in use
+      #  but have now been emptied (order shipped)
+      #
+      REDIS_BINS_STORE  = 'cowper.collection.bins.store'
+      REDIS_JOBS_STORE  = 'cowper.collection.jobs.store'
+      REDIS_NEXT_BIN_ID = 'cowper.collection.bins.next'
+      REDIS_FREE_BINS   = 'cowper.collection.bins.free'
+
+      def list
+        redis = Redis.new
+
+        keys = redis.keys("#{REDIS_BINS_STORE}:*")
+
+        bin_ids = keys.collect{|k| k.split(':')[1].to_i}
+        bin_ids = bin_ids.sort
+        puts "\n"
+        bin_ids.each do |id|
+          json = redis.get("#{REDIS_BINS_STORE}:#{id}")
+
+          puts "Bin #{id}\n"
+          job = JSON.parse(json)
+          job['created_on'] = Time.at(job['created_on'])
+          ap job
+          puts "\n\n"
+        end
+
+        hwm = redis.get REDIS_NEXT_BIN_ID
+        hwm = hwm.to_i 
+        puts "#{bin_ids.size} orders in bins"
+        puts "High water mark: #{hwm}"
+
+
+        redis_free_bins = redis.lrange(REDIS_FREE_BINS, 0, -1)
+        redis_free_bins = redis_free_bins.map{|r| r.to_i}
+        redis_free_bins.sort!
+
+        puts "Available bins #{redis_free_bins}" 
+
+        sanity_check =  ((1..hwm).to_a - bin_ids) == redis_free_bins
+        puts "Sanity check is #{sanity_check}"
+      end
+
+    end
+  end
+end
+
+Rocksteady::Utils::Bins.list
+

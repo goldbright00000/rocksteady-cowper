@@ -1,0 +1,38 @@
+#!/usr/bin/env ruby
+
+require 'byebug'
+require 'redis'
+
+require './storage/interface'
+require './model/bin_manager'
+
+
+def should_clear_bin(job_id)
+  bin = Rocksteady::BinManager.find_by_printjob_id(job_id) rescue nil
+end
+
+
+
+args = $*
+
+if args.size >= 2
+  new_status = args.shift
+
+  args.each do |id|
+    old_status = Rocksteady::Storage::Orders.status(id)
+
+    puts "Moving #{id} from '#{old_status}' to '#{new_status}'"
+
+    Rocksteady::Storage::Orders.update_status(id, new_status)
+
+    if  ['Packing', 'Packed', 'Collecting', 'Collected'].include? old_status
+
+      puts "Clear bin #{should_clear_bin(id)}"
+
+    else
+      puts "No need to clear a bin"
+    end
+  end
+else
+  puts "You need to specify the print job id and the status"
+end

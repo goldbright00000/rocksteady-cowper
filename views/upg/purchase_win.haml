@@ -1,0 +1,6 @@
+:javascript
+  if (self === top) {
+    window.top.location = '#{@non_iframe_redirect_url}';
+  } else {
+    window.parent.postMessage({status: 'ok', order_number: "#{@print_request_id}"}, "#{@domain_of_client}");
+  }

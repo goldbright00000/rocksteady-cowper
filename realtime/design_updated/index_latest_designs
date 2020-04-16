@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+
+require "./realtime/base"
+
+module Rocksteady
+  module MQ
+    module IndexLatestDesigns
+      extend Rocksteady::MQ::Base
+      extend self
+
+      HOSTNAME = Rocksteady::Config.url_hostname
+
+      LATEST_CSV_FILE = "#{Config.public_dir}/designs/latest.csv"
+
+      GCS_CONFIGURED = nil != Config.google_storage_public_bucket
+
+      GCS_PATH = "gs://#{Config.google_storage_public_bucket}/public/designs"
+
+      CACHE_TIME = 300
+
+
+      private
+       @last_updated = Time.now
+
+      def link(id)
+        "https://#{HOSTNAME}/app/#/kits/-/-/-/-/#{id}/selector-map"
+      end
+
+
+      def read_recent_designs
+        records = Storage::Designs.recent_interesting
+
+        records = records.map{|e| "#{link e.id}|#{e.description}|#{e.email}|#{e.input['geo_location']}|#{e.input['client_ip']}|#{e.updated_at}|#{e.created_at}|#{e.brand}" rescue ""}
+
+      end
+
+
+      def write_local_file(records)
+
+        string = records.join("\n")
+
+        File.open(LATEST_CSV_FILE, 'w') {|f| f.write "#{string}\n"}
+      end
+
+
+      def copy_to_bucket
+        return unless GCS_CONFIGURED
+
+        #
+        #   Tell intermediaries not to cache the file and tell the browser
+        #   to expire after CACHE_TIME
+        #
+        `gsutil -h "Cache-Control:private, max-age=#{CACHE_TIME}"  cp #{LATEST_CSV_FILE} #{GCS_PATH}`
+      end
+
+
+      #
+      #   Must return true if we completed processing the message
+      #   Below we have an early exit based on @last_updated but
+      #   this counts as handling the message
+      #
+      def handle msg
+        t_now = Time.now
+
+        return true  unless t_now > @last_updated + CACHE_TIME
+
+        records = read_recent_designs
+
+        write_local_file(records)
+
+        copy_to_bucket()
+
+        Logging.info "index_latest_designs wrote #{records.size} design records"
+
+        @last_updated = t_now
+
+        true
+      end
+
+    end
+  end
+end
+
+
+
+Rocksteady::MQ::IndexLatestDesigns.run('index_latest_designs', Rocksteady::MQ::Base::DesignUpdated)

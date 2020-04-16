@@ -1,0 +1,6 @@
+:javascript
+  if (self === top) {
+    window.top.location = '#{@non_iframe_redirect_url}';
+  } else {
+    window.parent.postMessage({status: 'notok', message: "#{@upg_failure_message}"}, "#{@domain_of_client}");
+  }

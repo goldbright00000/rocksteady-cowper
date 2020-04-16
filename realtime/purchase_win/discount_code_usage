@@ -1,0 +1,37 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+require './realtime/base'
+
+
+module Rocksteady
+  module MQ
+    module DiscountCodeUsage
+      extend Rocksteady::MQ::Base
+      extend self
+
+      private
+
+      NGINX_URL = Rocksteady::Config.nginx_url
+
+      def handle msg
+        return unless discount_code = msg['print_request']['discount_code']
+
+        json = { discount_code_usage: {name: discount_code} }
+
+        @auth = {:username => 'rockSteady', :password => 'Simpsons'}
+
+        HTTParty.post("#{NGINX_URL}/api/discount_code/usage",
+                      :body => json.to_json,
+                      :headers => {'Content-Type' => 'application/json' },
+                      :verify => false,
+                      :basic_auth => @auth)
+
+        puts "Code #{discount_code} used."
+      end
+    end
+  end
+end
+
+
+
+Rocksteady::MQ::DiscountCodeUsage.run('discount_code_usage', Rocksteady::MQ::Base::PurchaseWin)

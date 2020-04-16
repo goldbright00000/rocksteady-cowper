@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+
+require "./realtime/base"
+
+
+module Rocksteady
+  module MQ
+    #
+    #   Immediately respond to purchases with an invoice email
+    #   We still have the crontab as a backup.
+    #
+    #   This process relies on a separate process to send the
+    #   email.
+    #
+    module SendInvoice
+      extend Rocksteady::MQ::Base
+      extend self
+
+
+      #
+      #   Return true to indicate success.
+      #   The batch job marks the email as sent in mongo if
+      #   it got accepted for delivery
+      #
+      def handle msg
+        #
+        #  The bin/email process sends invoice emails.
+        #
+        Dir.chdir('/var/hg/repos/cowper') do
+          `./bin/email`
+        end
+
+        true
+      end
+    end
+  end
+end
+
+Rocksteady::MQ::SendInvoice.run('send_invoice', Rocksteady::MQ::Base::PurchaseWin)
