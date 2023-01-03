@@ -16,7 +16,7 @@ gem 'sequel', '4.42.1'
 gem 'mongo', '2.6.2'
 gem 'bson_ext', '1.5.1'
 
-gem 'httparty', '0.13.3'
+gem 'httparty', '0.21.0'
 gem 'awesome_print', '1.6.1'
 gem 'cityhash', '0.8.1'
 
